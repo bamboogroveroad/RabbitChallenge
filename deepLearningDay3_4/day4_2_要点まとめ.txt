@@ -1,0 +1,59 @@
+●Alpha Go Lee
+・Alpha Go Lee のPolicyNet（方策関数）、ValueNet（価値関数）は
+共に畳み込みニューラルネットワーク。
+
+・Alpha Go Lee のPolicyNet（方策関数）のNNは下記
+盤面特徴入力(19*19:48channel (石:3ch、着手履歴:8ch、オール0:1ch等))　→　Convolution
+　→　Relu関数　→　（Convolution　→　Relu関数）　* 11 　→　Convolution 　→　SoftMax※　→ 出力　
+
+※SoftMax Layer 多次元を総和1の確率分布に変換するLayer
+出力は19*19マスの着手予想確率が出力される
+
+・Alpha Go Lee のValueNet（方策関数）のNNは下記
+盤面特徴入力(19*19:49channel (石:3ch、着手履歴:8ch、オール0:1ch、手番:1ch等))　→　Convolution
+　→　Relu関数　→　（Convolution　→　Relu関数）　* 11 　→　Convolution 　→ 
+全結合256unit → 全結合1unit → TanH※　→ 出力
+
+※TanH Layer -∞～∞の値を-1から1までに変換するLayer
+出力は現局面の勝率を-1～1で表したものが出力される。
+
+・Alpha Goの学習は以下のステップで行われる
+1)教師あり学習によるRollOutPolicy（NNではなく線形の方策関数、高速に着手確率を出すために使用、PolicyNetとやることは同じ）
+とPolicyNetの学習（人間同士の棋譜データを学習させる）
+2)強化学習によるPolicyNetの学習（PolicyNetとPolicyPoolに保存されているものと対局させて学習）
+3)強化学習によるValueNetの学習
+
+・モンテカルロ木探索（囲碁ソフトでは最も有効な強化学習の学習手法）について
+→価値関数を学習させるときに用いる。
+
+●Alpha Go Zero
+Alpha Go Leeとの違い
+1.教師あり学習を一切行わず、強化学習のみで作成。
+2.特徴入力からヒューリスティックな要素(人間が判断した項目)を排除し、石の配置のみにした。
+3.PolicyNetとValueNetを１つのネットワークに統合した。
+4.ResidualNet（後述）を導入した。
+5.モンテカルロ木探索からRollOutシミュレーションをなくした。
+
+1つのネットワークに統合したため、
+→ResidualBlock　×　39の後に、特徴量を分けて、2つに枝分かれ、最後にPolicy、Valueを出力する処理になる。
+
+
+〇ResidualNetworkについて
+ネットワークにショートカット構造を追加して、勾配の爆発、消失を抑える効果を狙ったもの。
+
+ResidualNetworkを使うことにより、100層を超えるネットワークでの安定した学習が可能となった。
+
+基本構造はConvolution→BatchNorm→ReLU→Convolution→BatchNorm→Add→ReLUのBlockを１単位にして積み重ねる形となる。
+
+また、ResidualNetworkを使うことにより層数の違うNetWorkのアンサンブル効果が得られているという説もある。
+
+
+*ResidualBlockの派生形について
+①Residual　Blockの工夫
+Bottleneck,PreActivation
+
+②NetWork構造の工夫
+WideResNet,PyramidNet
+→これらは、重要な発見（下記のような※）というよりは、既存を組み合わせた論文の項目名のイメージに過ぎない。
+
+※畳み込み、プーリング、RNN、Attention（そこに活性化関数）

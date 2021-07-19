@@ -1,0 +1,205 @@
+物体検知・セグメンテーション
+introduction
+
+鳥観図：広義の物体認識タスクについて
+●入力
+・画像
+
+●出力　：タスクの難易度は下にいくほど難しい。
+----------------------------------------
+・分類
+クラスラベル
+
+↑分類は、物体の位置に興味なし
+
+・物体検知
+Bounding　Box【bbox/BB】
+
+・意味領域分割
+(各ピクセルに対し単一)クラスラベル
+
+↑上3つは、インスタンスの区別に興味なし
+
+・個体領域分割
+(各ピクセルに対し単一)クラスラベル
+----------------------------------------
+・物体検知における一般的な出力例について
+
+◎代表的データセットについて
+→代表的データセットを把握することで、目的に応じたデータセットを判断できるようになる
+
+●VOC12 (Visual Object Classes 2012 ｺﾝﾍﾟ終了)
+ｸﾗｽ:20､Train+Val:11540 Box/画像:2.4
+
+●ILSVRC17(ILSVRC Object Detection Challenge):ImageNetのｻﾌﾞｾｯﾄ
+ｸﾗｽ:200､Train+Val:476668 Box/画像:1.1
+ 
+●MS COCO18(Microsoft Common Object in Context)
+ｸﾗｽ:80､Train+Val:123287 Box/画像:7.3
+
+●OICOD18(Open Images Challenge Object Detection):Open Images V4のｻﾌﾞｾｯﾄ
+ｸﾗｽ:500､Train+Val:1743042 Box/画像:7.0
+
+＊上記のうちILSVRC17以外は、物体個々にラベリングされている。(instance Annotation)
+＊各データセット毎に画像サイズは異なる。
+
+
+・Box/画像について
+この数値が小さいものはアイコン的な映り（日常感とはかけ離れやすい）
+この数値が大きいものは部分的な重なり等も見られる（日常生活のコンテキストに近い）
+
+●ポジショニングマップ
+・目的に応じたBox/画像の選択を！
+・クラス数が大きいことは嬉しいのか？（ImageNetのラベルでノートPCが、LaptopとNotebookに分かれていたりする。）
+
+
+◎評価指標
+分類問題における評価指標の復習
+
+・Confusion Matrix
+　　予測　Positive  Negative
+真値       
+Positive   TruePo    FalseNe
+Negative   FalsePo   TrueNe
+
+Precision = TruePo/(TruePo + FalsePo)
+Recall    = TruePo/(TruePo + FalseNe)
+
+・Confidenceの閾値を変化させる事でPrecision-Recall curveが描ける
+・クラス分類の場合、閾値を変えても混同行列に含まれる件数は不変。
+・物体検出の場合はクラス分類と異なり、件数が変わりうる。
+
+・IoU（Intersection over Union）という指標
+物体検出においてはクラスラベルだけでなく、 物体位置の予測精度も評価したい！
+
+IoU = AreaofOverlap / AreaofUnion　※別名Jaccard係数
+
+・STOP標識の位置予測の例
+・IoUは、Grand-Truth BBに占める占有面積、Predicted BBに占める占有面積ではない！
+
+・入力１枚で見るPrecision/Recall
+conf.の閾値：0.5 IoUの閾値：0.5
+6データ例
+P5のケースは、IoU　> 0.5 であるが既によりConf.の高いP1で検出済みなのでFPになる。
+Precision=0.5 Recall=1
+
+・Precision/Recallの計算例（クラス単位）
+conf.の閾値：0.5 IoUの閾値：0.5
+6データ例
+Precision=0.5 Recall=0.75
+※この場合、Picture4の検出がされなかったので、Recall=3/(3+1)となる。
+
+★AP: Average Precision
+conf.の閾値を0.05～0.95まで変えてみるとPrecisionもRecallも変わるはず。、
+conf.の閾値をβとするとき、
+Recall = R(β),Precision = P(β)
+⇔P＝f(R) [Precision-Recall curve]
+
+Def. Average Precision
+AP=∫P(R)dR (和訳：PR曲線の下側面積) 
+（注：∫記号の上下は1,0）
+
+※補足：PR曲線を描くためにConf.を0.05から変化させていくと、conf.の閾値の変化に伴って
+Recall, Precision が変わり、それによってPR曲線が描ける、PR曲線の下側面積としてAPが指標として表される。大きいほうが良い指標。
+
+⇔いままでは、クラスラベル固定のもとで考えていたことに注意
+
+□mAP: mean Average Precision
+クラス数がCのとき、APの算術平均
+mAP=1/c　*　ΣAPi
+（注：Σ記号の対象はi=1からC）
+
+□mAP COCO: MS COCOで導入された指標
+ここまで、 IoU閾値は0.5で固定 
+→ 0.5から0.95まで0.05刻みでAP＆mAPを計算し算術平均を計算
+
+□FPS：Flames per Second
+物体検知応用上の要請から,検出精度に加え検出速度も問題となる。
+
+-------------------------------------------------------------------
+物体検知の大枠
+2012 AlexNetの登場を皮切りに,時代はSIFTからDCNNへ
+
+・物体検知のフレームワーク
+●2段階検出器（Two-stage detector）
+・候補領域の検出とクラス推定を別々に行う
+・相対的に精度が高い傾向
+・相対的に計算量が大きく推論も遅い傾向
+
+●1段階検出器（One-stage detector）
+・候補領域の検出とクラス推定を同時に行う
+・相対的に精度が低い傾向
+・相対的に計算量が小さく推論も早い傾向
+
+
+●SSD（Single Shot Detector）
+・YOLOと並んで代表的な1段階検出器
+・VGG16をベースとしている
+
+・特徴マップからの出力
+マップ中の１つの特徴量における１つのDefault Boxについて
+出力サイズ  #Class + 4  (※4はオフセット項Δx,Δy,Δw,Δh )
+
+マップ中の各特徴量にk個のDefault Boxを用意するとき, 
+出力サイズ　k　×（#Class + 4）
+
+→更に, 特徴マップのサイズがm×nであるとすれば, 
+出力サイズ　k　×（#Class + 4）×　mn
+
+・SSDのデフォルトボックス数について
+（#class = 20 + 1(背景クラス)であることに注意して計算する。）
+
+※物理的なサイズと解像度を混同しがちなので注意
+→解像度が小さくなるにつれて、検出物体が大きいものを検出する。
+
+●その他の工夫
+・多数のDefault Boxを用意したことで生ずる問題への対処
+
+・Non-Maximum Suppression
+Default Boxを多数用意したことにより１つの物体しか映っていなくとも、
+そこに複数のBounding Boxが存在する事になってしまう。冗長。
+→対策としては、IoUを計算し、IoUが一定以上かぶっているのであれば、最もconf.が高いもののみを残し、それ以外は排除する。
+
+・Hard Negative Mining
+物体として映っているものよりも、背景と判断されるNegativeクラスに属するようなBounding Boxは多く存在するはず。
+背景（Negativeクラス）と非背景（Positiveクラス）のバランスが非常に不均衡になる事が用意に想像。
+→対策としては、最大でも、N:Pが、1:3となるような制約をかける（NegativeのBounding Boxを削る処置。）
+
+※ほかにも、原著論文では、Default Boxのアスペクト比の選び方やData Augmentationについても触れられている。
+
+●損失関数
+損失関数が、conf.と、location（物体の検出位置）に依存している事を確認
+
+---------------------------------------------------------------------------
+●Semantic Segmentationの概略について
+
+〇Up-sampling
+
+Convolution、Poolingを繰り返す事により、入力画像の解像度が落ちていくという問題がある。
+Semantic Segmentationでは、入力画像と同じサイズの画像があり、その各ピクセルに対してクラス分類を行うため、
+落ちた解像度をどのようにして元に戻すのかが肝となる。
+→この解像度を元に戻す事をUp-samplingと言う。
+
+〇Deconvolution　/　Transposed convolution
+ 
+・通常のConv.層と同様 kernel size, padding, stride を指定
+処理手順は下記
+1.特徴マップのpixel間隔をstrideだけ空ける
+2.特徴マップのまわりに(kernel size - 1) - paddingだけ余白を作る
+3.畳み込み演算を行う
+
+※和訳として逆畳み込みと呼ばれることも多いが畳み込みの逆演算ではないことに注意
+ → 当然, poolingで失われた情報が復元されるわけではない
+
+・poolingによりローカルな情報（輪郭）が失われていく
+
+→失わないように、低レイヤーPooling層の出力をelement-wise addition
+することでローカルな情報を補完してからUp-sampling(FCN)
+
+・U-Net（Skip-connection,チャネルごとに結合）
+
+〇Unpooling
+・プーリングした時の位置情報を保持しておく方法
+
+〇Dilated Convolution
+・Convolutionの段階で受容野を広げる工夫
